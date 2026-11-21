@@ -1,0 +1,50 @@
+#!/bin/sh /etc/rc.common
+
+USE_PROCD=1
+START=99
+
+PROG=/usr/bin/cloudflared
+
+start_service() {
+	config_load cloudflared
+
+	local enabled token protocol loglevel
+	config_get_bool enabled config enabled 0
+	[ "$enabled" = "1" ] || return 0
+
+	config_get token config token
+	if [ -z "$token" ]; then
+		logger -t cloudflared "Tunnel is enabled but no tunnel token is configured"
+		return 1
+	fi
+
+	config_get protocol config protocol auto
+	case "$protocol" in
+		auto|quic|http2) ;;
+		*)
+			logger -t cloudflared "Invalid protocol '$protocol'; expected auto, quic, or http2"
+			return 1
+			;;
+	esac
+
+	config_get loglevel config loglevel info
+	case "$loglevel" in
+		fatal|error|warn|info|debug) ;;
+		*)
+			logger -t cloudflared "Invalid log level '$loglevel'"
+			return 1
+			;;
+	esac
+
+	procd_open_instance cloudflared
+	procd_set_param command "$PROG" tunnel --no-autoupdate \
+		--protocol "$protocol" --loglevel "$loglevel" run --token "$token"
+	procd_set_param respawn
+	procd_set_param stdout 1
+	procd_set_param stderr 1
+	procd_close_instance
+}
+
+service_triggers() {
+	procd_add_reload_trigger cloudflared
+}

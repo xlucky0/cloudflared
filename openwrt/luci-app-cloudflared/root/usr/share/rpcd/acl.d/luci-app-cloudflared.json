@@ -1,0 +1,14 @@
+{
+	"luci-app-cloudflared": {
+		"description": "Grant access to Cloudflare Tunnel configuration and status",
+		"read": {
+			"uci": [ "cloudflared" ]
+		},
+		"write": {
+			"uci": [ "cloudflared" ]
+		},
+		"ubus": {
+			"service": [ "list" ]
+		}
+	}
+}

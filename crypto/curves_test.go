@@ -4,7 +4,6 @@ import (
 	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
-	"runtime"
 	"slices"
 	"testing"
 
@@ -101,26 +100,20 @@ func runClientServerHandshake(t *testing.T, curves []tls.CurveID) []tls.CurveID 
 	return advertisedCurves
 }
 
-// TestSupportedCurvesNegotiation verifies that the curves returned by
-// GetCurvePreferences survive a real TLS handshake unchanged, i.e. the
-// standard library advertises exactly the curves we expect. Currently only
-// PostQuantumPrefer is exercised because PostQuantumStrict would cause the
-// handshake to fail against httptest servers that do not support
-// X25519MLKEM768 server-side.
+// TestSupportedCurvesNegotiation verifies that the configured curve
+// preferences are advertised in a real TLS handshake. The TLS stack may omit
+// the deprecated draft curve if it does not support it.
 func TestSupportedCurvesNegotiation(t *testing.T) {
 	t.Parallel()
 	for _, tcase := range []features.PostQuantumMode{features.PostQuantumPrefer} {
 		curves, err := getCurvePreferences(tcase)
 		require.NoError(t, err)
 		advertisedCurves := runClientServerHandshake(t, curves)
-		require.True(t, slices.Contains(advertisedCurves, tls.CurveP256))
-		require.True(t, slices.Contains(advertisedCurves, tls.X25519MLKEM768))
-		expectedLength := 2
-		if runtime.GOOS == "linux" {
-			// P256Kyber768Draft00 only exists in linux
-			require.True(t, slices.Contains(advertisedCurves, P256Kyber768Draft00))
-			expectedLength = 3
+		expectedCurves := []tls.CurveID{tls.X25519MLKEM768}
+		if slices.Contains(advertisedCurves, P256Kyber768Draft00) {
+			expectedCurves = append(expectedCurves, P256Kyber768Draft00)
 		}
-		require.Len(t, advertisedCurves, expectedLength)
+		expectedCurves = append(expectedCurves, tls.CurveP256)
+		require.Equal(t, expectedCurves, advertisedCurves)
 	}
 }
